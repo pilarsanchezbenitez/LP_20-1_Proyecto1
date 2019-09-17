@@ -1,8 +1,8 @@
 module BAE where
+
     import ParseBAE
     import Data.List
 
-    type Sust = (Name, BAE)
   -- | BAE. Tipo que representa el conjunto de expresiones Aritmetico-Booleanas. 
     data BAE = V Name 
              | N Int 
@@ -20,6 +20,11 @@ module BAE where
              | Ift BAE BAE BAE
              | LetE Name BAE BAE
   
+  -- | Sust. Tipo que representa una sustitución de las expresiones Aritmetico-Booleanas.           
+    type Sust = (Name, BAE)
+  -- | Ctx. Tipo que represeta al contexto para la verificacion de tipos.
+    type Ctx = [(Name, Type)]
+          
   -- | se instancia la clase Show para poder especificar como queremos que se impriman las
   -- | expresiones Aritmetico-Booleanas. 
     instance Show BAE where
@@ -40,24 +45,26 @@ module BAE where
       show (LetE x e1 e2) = "let("++show e1++","++x++"."++show e2++")"
 
   -- | transform. funcion que dada una declaracion devuelve su expresion Aritmetico-Booleana correspondiente
-    transform :: Stmt -> BAE
-    transform (Var n) = V n
-    transform (Num x) = N (fromIntegral x)
-    transform (BoolCt b) = B b
-    transform (ABUnary Not e) = Neg (transform e)
-    transform (ABUnary Succ e) = Suc (transform e)
-    transform (ABUnary Pred e) = Pre (transform e)
-    transform (ABBinary And e1 e2) = Conj (transform e1) (transform e2)
-    transform (ABBinary Or e1 e2) = Disy (transform e1) (transform e2)
-    transform (ABBinary Add e1 e2) = Plus (transform e1) (transform e2)
-    transform (ABBinary Times e1 e2) = Prod (transform e1) (transform e2)
-    transform (ABRel GrT e1 e2) = Gt (transform e1) (transform e2)
-    transform (ABRel LowT e1 e2) = Lt (transform e1) (transform e2)
-    transform (ABRel Equ e1 e2) = Equi (transform e1) (transform e2)
-    transform (If e1 e2 e3) = Ift (transform e1) (transform e2) (transform e3)
-    transform (Let x e1 e2) = LetE x (transform e1) (transform e2)      
+    transform_bae :: Stmt -> BAE
+    transform_bae (Var n) = V n
+    transform_bae (Num x) = N (fromIntegral x)
+    transform_bae (BoolCt b) = B b
+    transform_bae (ABUnary Not e) = Neg (transform_bae e)
+    transform_bae (ABUnary Succ e) = Suc (transform_bae e)
+    transform_bae (ABUnary Pred e) = Pre (transform_bae e)
+    transform_bae (ABBinary And e1 e2) = Conj (transform_bae e1) (transform_bae e2)
+    transform_bae (ABBinary Or e1 e2) = Disy (transform_bae e1) (transform_bae e2)
+    transform_bae (ABBinary Add e1 e2) = Plus (transform_bae e1) (transform_bae e2)
+    transform_bae (ABBinary Times e1 e2) = Prod (transform_bae e1) (transform_bae e2)
+    transform_bae (ABRel GrT e1 e2) = Gt (transform_bae e1) (transform_bae e2)
+    transform_bae (ABRel LowT e1 e2) = Lt (transform_bae e1) (transform_bae e2)
+    transform_bae (ABRel Equ e1 e2) = Equi (transform_bae e1) (transform_bae e2)
+    transform_bae (If e1 e2 e3) = Ift (transform_bae e1) (transform_bae e2) (transform_bae e3)
+    transform_bae (Let x e1 e2) = LetE x (transform_bae e1) (transform_bae e2)
 
-
+    transform :: StmtT -> (BAE,Type)
+    transform (Typed s t) = (transform_bae s,t) 
+    
   -- | fv. funcion que devuelve el conjunto de variables libres de una expresion Aritmetico-Booleanas.
     fv :: BAE -> [Name]
     fv e = case e of 
@@ -104,15 +111,44 @@ module BAE where
   -- | Aritmetico-Booleana a evaluar.
     eval1 :: BAE -> BAE
     eval1 e = case e of
-      Suc (N n) -> N (n+1)
-    --eval1 e = error $ "Execution Error: Locked state."
-  
+      (N n) -> N n
+      (B b) -> B b
+      (V x) -> V x
+      (Suc (N n)) -> N (n+1)
+      (Suc e1) -> Suc (eval1 e1)
+      (Pre (N 0)) -> N 0
+      (Pre (N n)) -> N (n-1)
+      (Pre e1) -> Pre (eval1 e1)
+      (Plus (N n)(N m)) -> N (n+m)
+      (Plus e1 e2) -> Plus (eval1 e1) (eval1 e2)
+      (Prod (N n)(N m)) -> N (n*m)
+      (Prod e1 e2) -> Prod (eval1 e1) (eval1 e2)
+      (Neg (B True)) -> B (False)
+      (Neg (B False)) -> B (True)
+      (Neg e1) -> Neg (eval1 e1)
+      (Conj (B True) (B True)) -> B (True)
+      (Conj e1 e2) -> Conj (eval1 e1) (eval1 e2)
+      (Disy (B False) (B False)) -> B (False)
+      (Disy e1 e2) -> Disy (eval1 e1) (eval1 e2)
+      (Gt (N n)(N m)) -> if (n < m) then B (True) else B (False)
+      (Gt e1 e2) -> Gt (eval1 e1)(eval1 e2)
+      (Lt (N n)(N m)) -> if (n > m) then B (True) else B (False)
+      (Lt e1 e2) -> Lt (eval1 e1)(eval1 e2)
+      (Equi (N n)(N m)) -> if (n == m) then B (True) else B (False)
+      (Equi e1 e2) -> Equi (eval1 e1)(eval1 e2)
+      (Ift (B True) e1 e2) -> eval1 e1
+      (Ift (B False) e1 e2) -> eval1 e2
+      (Ift e3 e1 e2)-> Ift (eval1 e3) e1 e2
+      (LetE (x) (N n) e2) ->  substitution e2 (x, (N n))
+      (LetE (x) (B b) e2) -> substitution e2 (x, (B b))
+      (LetE (x) e1 e2) -> LetE (x) (eval1 e1) e2
+
   -- | evals. funcion que devuelve 0 o mas pasos de la evaluacion de una expresion
   -- | Aritmetico-Booleana.
     evals :: BAE -> BAE
-    evals (N n)= N n
-    evals (B b)= B b
-    evals (V x)= V x
+    evals (N n) = N n
+    evals (B b) = B b
+    evals (V x) = V x
     evals e = evals $ eval1 e
 
   -- | isValue. funcion que determina si una expresion Aritmetico-Booleana es valor.
@@ -126,11 +162,8 @@ module BAE where
     eval :: BAE -> BAE
     eval e = if isValue (evals e) then evals e else error "error"
 
-    data Tipo = NAT | BOOL
 
-    type Ctx = [(Name,Tipo)]
-
-    vt :: Ctx -> BAE -> Tipo -> Bool
+    vt :: Ctx -> BAE -> Type -> Bool
     vt c (N n) NAT = True
     vt c (B b) BOOL = True
     vt c (V v) t = (v,t) `elem` c
@@ -150,6 +183,5 @@ module BAE where
       False -> case (vt c e1 BOOL) of
         True -> vt (c `union`[(x,BOOL)]) e2 t
         False -> False
-    vt _ _ _ = False     
-    --vt c (LetE x e1 e2) t = 
+    vt _ _ _ = False
 

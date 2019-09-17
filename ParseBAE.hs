@@ -9,6 +9,10 @@ module ParseBAE where
 
   type Name = String
 
+  data Type = NAT | BOOL deriving(Show,Eq)
+
+  data StmtT = Typed Stmt Type deriving(Show)
+
   data Stmt = If Stmt Stmt Stmt 
             | Let Name Stmt Stmt
             | ABUnary ABUn Stmt
@@ -56,6 +60,18 @@ module ParseBAE where
 
   baeParser :: Parser Stmt
   baeParser = whiteSpace >> parens statement
+
+
+  statement_typed :: Parser StmtT
+  statement_typed = 
+    do 
+      stmt <- statement
+      reservedOp "::"
+      typo <- typoParser
+      return $ Typed stmt typo
+
+  typoParser = (reserved "NAT" >> return NAT)
+            <|> (reserved "BOOL" >> return BOOL)
 
   statement :: Parser Stmt
   statement = ifStmt
