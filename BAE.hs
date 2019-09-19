@@ -61,11 +61,14 @@ module BAE where
     transform_bae (ABRel Equ e1 e2) = Equi (transform_bae e1) (transform_bae e2)
     transform_bae (If e1 e2 e3) = Ift (transform_bae e1) (transform_bae e2) (transform_bae e3)
     transform_bae (Let x e1 e2) = LetE x (transform_bae e1) (transform_bae e2)
-
+--Transform recibira una declaración y nos devolvera una tupla, con un BAE y el tipo del que será el BAE
+--Notemos que utiliza como función auxiliar a Transform_bae, ese hara la evaluacion de cada caso para cada parte de la semantica de BAE
     transform :: StmtT -> (BAE,Type)
     transform (Typed s t) = (transform_bae s,t) 
     
   -- | fv. funcion que devuelve el conjunto de variables libres de una expresion Aritmetico-Booleanas.
+  -- Queremos saber las variables libres que hay en cada expresion
+  -- En cada operando se utiliza la recursion, donde nuestros casos base son los numeros, las variables y los booleanos
     fv :: BAE -> [Name]
     fv e = case e of 
         N n -> []
@@ -86,6 +89,7 @@ module BAE where
   
   -- | substitution. funcion que devuelve la expresion Aritmetico-Booleanas resultante de aplicar
   -- | una sustitucion a la misma. 
+  -- La funcion de substitucion en algunos cass tiene que hacer uso de las fv para que la sustitucion se haga correctamente
     substitution :: BAE -> Sust -> BAE
     substitution e s@(v, e') = case e of
                 V x -> if x == v then e' else (V x)
@@ -109,6 +113,7 @@ module BAE where
   
   -- | eval1. funcion que devuelve un paso en la evalucion de una expresion 
   -- | Aritmetico-Booleana a evaluar.
+  -- Es un metodo auxiliar para elas, donde observa en cada tipo y en cada caso la evaluacion de cada operador
     eval1 :: BAE -> BAE
     eval1 e = case e of
       (N n) -> N n
@@ -145,6 +150,7 @@ module BAE where
 
   -- | evals. funcion que devuelve 0 o mas pasos de la evaluacion de una expresion
   -- | Aritmetico-Booleana.
+  -- Este es una funcion auxiliar para eval donde nos ayuda a realizar la recursion de los casos base que son los números y los booleanos, y hace la composicionn de funciones para evals con eval1
     evals :: BAE -> BAE
     evals (N n) = N n
     evals (B b) = B b
@@ -152,6 +158,7 @@ module BAE where
     evals e = evals $ eval1 e
 
   -- | isValue. funcion que determina si una expresion Aritmetico-Booleana es valor.
+  --esta funcion nos ayudara para ver si la funcion la podemos evaluar, ya que debe cumplir con la especificacion de que cada operando recibe solo un booleano o un número y nos regresa lo mismo
     isValue :: BAE -> Bool 
     isValue e = case e of
       N n -> True
@@ -162,7 +169,7 @@ module BAE where
     eval :: BAE -> BAE
     eval e = if isValue (evals e) then evals e else error "error"
 
-
+-- vt solo nos dira si el operando es del tipo que debe devolver
     vt :: Ctx -> BAE -> Type -> Bool
     vt c (N n) NAT = True
     vt c (B b) BOOL = True
